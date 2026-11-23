@@ -1,0 +1,76 @@
+name: ${STACK_NAME:-lixionary-job-seeker}
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      MONGO_URI: ${MONGO_URI:-mongodb://mongo:27017}
+      MONGO_DB: ${MONGO_DB:-job_radar}
+      CONFIG_DIR: /app/config
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.minimax.io/v1}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-MiniMax-M1}
+      LLM_TAILOR_MODEL: ${LLM_TAILOR_MODEL:-MiniMax-M1}
+      MAX_LLM_SCORES_PER_RUN: ${MAX_LLM_SCORES_PER_RUN:-50}
+      APIFY_TOKEN: ${APIFY_TOKEN:-}
+      SERPAPI_KEY: ${SERPAPI_KEY:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      DASHBOARD_PUBLIC_URL: ${DASHBOARD_PUBLIC_URL:-http://mini-pc-2.fluffy-oratrice.ts.net:3000}
+      TZ: ${TZ:-Asia/Jakarta}
+    volumes:
+      - ./config:/app/config
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      INTERNAL_API_URL: http://backend:8000
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  mongo_data:

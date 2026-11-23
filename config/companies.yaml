@@ -1,0 +1,49 @@
+# Curated watchlist of active SEA/APAC & Remote-APAC tech companies across Greenhouse, Lever, and Ashby.
+# You can edit this file directly or via the in-app "CV & Config" editor in the dashboard.
+
+greenhouse:
+  - slug: "agoda"
+    name: "Agoda"
+  - slug: "gitlab"
+    name: "GitLab"
+  - slug: "canonical"
+    name: "Canonical"
+  - slug: "cloudflare"
+    name: "Cloudflare"
+  - slug: "stripe"
+    name: "Stripe"
+  - slug: "adyen"
+    name: "Adyen"
+  - slug: "coinbase"
+    name: "Coinbase"
+  - slug: "databricks"
+    name: "Databricks"
+  - slug: "okx"
+    name: "OKX"
+  - slug: "robinhood"
+    name: "Robinhood"
+
+lever:
+  - slug: "binance"
+    name: "Binance"
+  - slug: "palantir"
+    name: "Palantir"
+
+ashby:
+  - slug: "linear"
+    name: "Linear"
+  - slug: "supabase"
+    name: "Supabase"
+  - slug: "posthog"
+    name: "PostHog"
+  - slug: "render"
+    name: "Render"
+  - slug: "deel"
+    name: "Deel"
+
+# Optional search queries used if Apify LinkedIn or SerpApi Google Jobs keys are configured
+search_queries:
+  - "Head of Engineering Jakarta Indonesia"
+  - "Head of QA Quality Engineering Jakarta Singapore Remote APAC"
+  - "Engineering Manager Logistics Tech Indonesia Remote"
+  - "Director of Quality Engineering APAC"

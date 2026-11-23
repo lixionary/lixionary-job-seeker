@@ -1,0 +1,77 @@
+target_tracks:
+  - "Engineering Leadership"
+  - "Quality Engineering Leadership"
+  - "Hands-on Strategic IC"
+
+target_geographies:
+  - "Jakarta"
+  - "Indonesia"
+  - "Remote APAC"
+  - "Remote"
+  - "Singapore"
+  - "Southeast Asia"
+  - "APAC"
+
+# Titles containing any of these keywords are filtered out before calling the LLM
+exclude_title_keywords:
+  - "intern"
+  - "internship"
+  - "junior"
+  - "fresh graduate"
+  - "entry level"
+  - "sales"
+  - "account executive"
+  - "account manager"
+  - "business development"
+  - "bdr"
+  - "sdr"
+  - "partnerships"
+  - "marketing"
+  - "growth operation"
+  - "copywriter"
+  - "social media"
+  - "customer support"
+  - "customer success"
+  - "call center"
+  - "finance"
+  - "accounting"
+  - "tax "
+  - "treasury"
+  - "audit"
+  - "payroll"
+  - "legal"
+  - "counsel"
+  - "paralegal"
+  - "compliance"
+  - "risk "
+  - "human resources"
+  - "hr "
+  - "recruiter"
+  - "talent acquisition"
+  - "public sector"
+  - "non-executive director"
+
+# Technical & leadership keywords required in the title to pass pre-filtering
+include_title_keywords:
+  - "engineer"
+  - "engineering"
+  - "qa"
+  - "quality"
+  - "test"
+  - "sdet"
+  - "automation"
+  - "cto"
+  - "technical lead"
+  - "tech lead"
+  - "principal"
+  - "staff"
+  - "architect"
+  - "developer experience"
+  - "devex"
+  - "platform"
+  - "release"
+
+min_score_default_filter: 7
+max_llm_scores_per_run: 50
+digest_hour_wib: 8
+digest_minute_wib: 30

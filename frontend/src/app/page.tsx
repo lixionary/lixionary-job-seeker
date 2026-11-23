@@ -7,9 +7,12 @@ import {
   CheckCircle2,
   Clock,
   Copy,
+  Eye,
+  EyeOff,
   ExternalLink,
   FileText,
   Filter,
+  KeyRound,
   Loader2,
   MapPin,
   Plus,
@@ -19,6 +22,7 @@ import {
   Settings,
   Sparkles,
   X,
+  Zap,
 } from "lucide-react";
 
 type JobStatus =
@@ -98,6 +102,32 @@ interface HealthInfo {
   telegram_enabled: boolean;
 }
 
+interface IntegrationSettings {
+  llm_base_url: string;
+  llm_api_key: string;
+  llm_model: string;
+  llm_tailor_model: string;
+  max_llm_scores_per_run: number;
+  apify_token: string;
+  serpapi_key: string;
+  telegram_bot_token: string;
+  telegram_chat_id: string;
+  dashboard_public_url: string;
+}
+
+const DEFAULT_INTEGRATIONS: IntegrationSettings = {
+  llm_base_url: "https://api.minimax.io/v1",
+  llm_api_key: "",
+  llm_model: "MiniMax-M1",
+  llm_tailor_model: "MiniMax-M1",
+  max_llm_scores_per_run: 50,
+  apify_token: "",
+  serpapi_key: "",
+  telegram_bot_token: "",
+  telegram_chat_id: "",
+  dashboard_public_url: "https://job-seeker.fluffy-oratrice.ts.net",
+};
+
 const COLUMNS: { key: JobStatus; label: string; accent: string }[] = [
   { key: "new", label: "New Matches", accent: "border-emerald-500/40" },
   { key: "shortlisted", label: "Shortlisted", accent: "border-sky-500/40" },
@@ -174,12 +204,22 @@ export default function JobRadarDashboard() {
 
   // Config Editor Modal
   const [showConfigModal, setShowConfigModal] = useState<boolean>(false);
-  const [activeConfigTab, setActiveConfigTab] = useState<"cv" | "preferences" | "companies">("cv");
+  const [activeConfigTab, setActiveConfigTab] = useState<
+    "integrations" | "cv" | "preferences" | "companies"
+  >("integrations");
   const [cvDraft, setCvDraft] = useState<string>("");
   const [prefDraft, setPrefDraft] = useState<string>("");
   const [compDraft, setCompDraft] = useState<string>("");
+  const [integrationsDraft, setIntegrationsDraft] =
+    useState<IntegrationSettings>(DEFAULT_INTEGRATIONS);
+  const [showSecrets, setShowSecrets] = useState<boolean>(false);
   const [savingConfig, setSavingConfig] = useState<boolean>(false);
   const [configStatus, setConfigStatus] = useState<string>("");
+  const [testingLlm, setTestingLlm] = useState<boolean>(false);
+  const [llmTestResult, setLlmTestResult] = useState<{
+    ok: boolean;
+    message: string;
+  } | null>(null);
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -347,7 +387,9 @@ export default function JobRadarDashboard() {
         setDigestNote(
           data.sent
             ? "Daily digest sent to Telegram!"
-            : data.note || data.error || "Telegram not configured in .env; preview shown above."
+            : data.note ||
+                data.error ||
+                "Telegram not configured yet; configure it in CV & Config -> Integrations."
         );
       }
     } finally {
@@ -355,15 +397,25 @@ export default function JobRadarDashboard() {
     }
   };
 
-  const handleOpenConfig = async () => {
+  const handleOpenConfig = async (
+    initialTab: "integrations" | "cv" | "preferences" | "companies" = "integrations"
+  ) => {
+    setActiveConfigTab(initialTab);
     setShowConfigModal(true);
     setConfigStatus("");
+    setLlmTestResult(null);
     const res = await fetch("/api/config");
     if (res.ok) {
       const data = await res.json();
       setCvDraft(data.cv_markdown || "");
       setPrefDraft(data.preferences_yaml || "");
       setCompDraft(data.companies_yaml || "");
+      if (data.integrations) {
+        setIntegrationsDraft({
+          ...DEFAULT_INTEGRATIONS,
+          ...data.integrations,
+        });
+      }
     }
   };
 
@@ -378,16 +430,51 @@ export default function JobRadarDashboard() {
           cv_markdown: cvDraft,
           preferences_yaml: prefDraft,
           companies_yaml: compDraft,
+          integrations: integrationsDraft,
         }),
       });
       if (res.ok) {
-        setConfigStatus("Saved to MongoDB & synced to config/ files on disk.");
+        setConfigStatus(
+          "Saved! API keys, LLM models, CV, preferences, and company watchlist are now active."
+        );
+        await fetchDashboardData();
       } else {
         const err = await res.json();
         setConfigStatus(`Error: ${err.detail || "Failed to save config"}`);
       }
     } finally {
       setSavingConfig(false);
+    }
+  };
+
+  const handleTestLlm = async () => {
+    setTestingLlm(true);
+    setLlmTestResult(null);
+    try {
+      const res = await fetch("/api/config/test-llm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(integrationsDraft),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setLlmTestResult({
+          ok: true,
+          message: `Connected to ${data.model} (${data.latency_ms}ms) — Reply: "${data.reply}"`,
+        });
+      } else {
+        setLlmTestResult({
+          ok: false,
+          message: data.error || "Connection test failed.",
+        });
+      }
+    } catch (err) {
+      setLlmTestResult({
+        ok: false,
+        message: String(err),
+      });
+    } finally {
+      setTestingLlm(false);
     }
   };
 
@@ -460,21 +547,23 @@ export default function JobRadarDashboard() {
                 <h1 className="text-lg font-bold tracking-tight text-white">
                   Lixionary Job Radar & Triage
                 </h1>
-                <span
-                  className={`text-xs px-2.5 py-0.5 rounded-full border ${
+                <button
+                  onClick={() => handleOpenConfig("integrations")}
+                  title="Click to configure MiniMax / OpenAI-compatible LLM key"
+                  className={`text-xs px-2.5 py-0.5 rounded-full border transition cursor-pointer ${
                     health?.llm_enabled
-                      ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
-                      : "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                      ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25"
+                      : "bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25"
                   }`}
                 >
                   {health?.llm_enabled
-                    ? `LLM: ${health.llm_model}`
-                    : "Scorer: Heuristic Fallback (Set LLM_API_KEY for MiniMax)"}
-                </span>
+                    ? `LLM Active: ${health.llm_model}`
+                    : "Scorer: Heuristic Fallback (Click to Set LLM Key)"}
+                </button>
               </div>
               <p className="text-xs text-slate-400">
-                Engineering Leadership · Quality Engineering Leadership · Strategic IC ({health?.total_jobs ?? 0} total tracked,{" "}
-                {counts.filtered_out ?? 0} pre-filtered)
+                Engineering Leadership · Quality Engineering Leadership · Strategic IC (
+                {health?.total_jobs ?? 0} total tracked, {counts.filtered_out ?? 0} pre-filtered)
               </p>
             </div>
           </div>
@@ -515,11 +604,11 @@ export default function JobRadarDashboard() {
             </button>
 
             <button
-              onClick={handleOpenConfig}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 transition"
+              onClick={() => handleOpenConfig("integrations")}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-medium bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 transition"
             >
               <Settings className="h-4 w-4 text-amber-400" />
-              CV & Config
+              Settings & CV
             </button>
           </div>
         </div>
@@ -560,7 +649,9 @@ export default function JobRadarDashboard() {
               }`}
             >
               <Filter className="h-3.5 w-3.5" />
-              {highSignalOnly ? "Showing High-Signal Only (Score ≥ 7)" : "Showing All Scores (1–10)"}
+              {highSignalOnly
+                ? "Showing High-Signal Only (Score ≥ 7)"
+                : "Showing All Scores (1–10)"}
             </button>
           </div>
         </div>
@@ -698,8 +789,10 @@ export default function JobRadarDashboard() {
                   {selectedJob.title}
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  {selectedJob.location_policy || selectedJob.location_raw || "Location Unspecified"} ·{" "}
-                  {selectedJob.role_track || "General"}
+                  {selectedJob.location_policy ||
+                    selectedJob.location_raw ||
+                    "Location Unspecified"}{" "}
+                  · {selectedJob.role_track || "General"}
                 </p>
               </div>
               <button
@@ -1177,17 +1270,17 @@ export default function JobRadarDashboard() {
         </div>
       )}
 
-      {/* In-App CV & Config Editor Modal */}
+      {/* In-App Settings, API Keys, CV & Config Editor Modal */}
       {showConfigModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-4xl rounded-2xl bg-slate-900 border border-slate-800 p-6 space-y-4 shadow-2xl max-h-[90vh] flex flex-col">
+          <div className="w-full max-w-4xl rounded-2xl bg-slate-900 border border-slate-800 p-6 space-y-4 shadow-2xl max-h-[92vh] flex flex-col">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-base font-bold text-white">
-                  Candidate CV, Preferences & Company Watchlist
+                  Settings, API Keys, Candidate CV & Watchlist
                 </h2>
                 <p className="text-xs text-slate-400">
-                  Changes are persisted to MongoDB and synced directly to config/cv.md, config/preferences.yaml, and config/companies.yaml.
+                  All settings are persisted to MongoDB (and synced to config/ files) and take effect immediately without restarting Docker.
                 </p>
               </div>
               <button
@@ -1198,7 +1291,18 @@ export default function JobRadarDashboard() {
               </button>
             </div>
 
-            <div className="flex gap-2 border-b border-slate-800 pb-2">
+            <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-2">
+              <button
+                onClick={() => setActiveConfigTab("integrations")}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium ${
+                  activeConfigTab === "integrations"
+                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <KeyRound className="h-3.5 w-3.5" />
+                LLM & API Keys
+              </button>
               <button
                 onClick={() => setActiveConfigTab("cv")}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium ${
@@ -1207,7 +1311,7 @@ export default function JobRadarDashboard() {
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                config/cv.md
+                Candidate CV (cv.md)
               </button>
               <button
                 onClick={() => setActiveConfigTab("preferences")}
@@ -1217,7 +1321,7 @@ export default function JobRadarDashboard() {
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                config/preferences.yaml
+                Preferences (preferences.yaml)
               </button>
               <button
                 onClick={() => setActiveConfigTab("companies")}
@@ -1227,11 +1331,273 @@ export default function JobRadarDashboard() {
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                config/companies.yaml
+                Company Watchlist (companies.yaml)
               </button>
             </div>
 
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-y-auto pr-1">
+              {activeConfigTab === "integrations" && (
+                <div className="space-y-5 py-1">
+                  {/* MiniMax / OpenAI-Compatible LLM Section */}
+                  <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                          MiniMax 3 / OpenAI-Compatible LLM Scorer
+                        </h3>
+                        <p className="text-[11px] text-slate-400">
+                          Works with MiniMax (`https://api.minimax.io/v1` or `https://api.minimaxi.com/v1`), OpenRouter, OpenAI, or local vLLM/Ollama endpoints.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowSecrets(!showSecrets)}
+                        className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white"
+                      >
+                        {showSecrets ? (
+                          <>
+                            <EyeOff className="h-3.5 w-3.5" /> Hide Keys
+                          </>
+                        ) : (
+                          <>
+                            <Eye className="h-3.5 w-3.5" /> Show Keys
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-slate-300 block mb-1">
+                          LLM Base URL
+                        </label>
+                        <input
+                          type="text"
+                          value={integrationsDraft.llm_base_url}
+                          onChange={(e) =>
+                            setIntegrationsDraft({
+                              ...integrationsDraft,
+                              llm_base_url: e.target.value,
+                            })
+                          }
+                          placeholder="https://api.minimax.io/v1"
+                          className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs text-white font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs text-slate-300 block mb-1">
+                          LLM API Key (leave empty for heuristic fallback)
+                        </label>
+                        <input
+                          type={showSecrets ? "text" : "password"}
+                          value={integrationsDraft.llm_api_key}
+                          onChange={(e) =>
+                            setIntegrationsDraft({
+                              ...integrationsDraft,
+                              llm_api_key: e.target.value,
+                            })
+                          }
+                          placeholder="eyJhbGciOi... or sk-..."
+                          className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs text-white font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs text-slate-300 block mb-1">
+                          Bulk Scoring Model Name
+                        </label>
+                        <input
+                          type="text"
+                          value={integrationsDraft.llm_model}
+                          onChange={(e) =>
+                            setIntegrationsDraft({
+                              ...integrationsDraft,
+                              llm_model: e.target.value,
+                            })
+                          }
+                          placeholder="MiniMax-M1 or MiniMax-Text-01"
+                          className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs text-white font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs text-slate-300 block mb-1">
+                          On-Demand CV Tailoring Model Name
+                        </label>
+                        <input
+                          type="text"
+                          value={integrationsDraft.llm_tailor_model}
+                          onChange={(e) =>
+                            setIntegrationsDraft({
+                              ...integrationsDraft,
+                              llm_tailor_model: e.target.value,
+                            })
+                          }
+                          placeholder="MiniMax-M1"
+                          className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs text-white font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs text-slate-300 block mb-1">
+                          Max LLM Scores Per Scrape Run (Safety Cap)
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={500}
+                          value={integrationsDraft.max_llm_scores_per_run}
+                          onChange={(e) =>
+                            setIntegrationsDraft({
+                              ...integrationsDraft,
+                              max_llm_scores_per_run: Number(e.target.value) || 50,
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs text-white"
+                        />
+                      </div>
+
+                      <div className="flex items-end">
+                        <button
+                          type="button"
+                          onClick={handleTestLlm}
+                          disabled={testingLlm}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white transition"
+                        >
+                          {testingLlm ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Testing LLM...
+                            </>
+                          ) : (
+                            <>
+                              <Zap className="h-3.5 w-3.5" />
+                              Test LLM Connection
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {llmTestResult && (
+                      <div
+                        className={`p-2.5 rounded-lg text-xs border ${
+                          llmTestResult.ok
+                            ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                            : "bg-rose-500/10 text-rose-300 border-rose-500/30"
+                        }`}
+                      >
+                        {llmTestResult.message}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Telegram Daily Digest Section */}
+                  <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-sky-400">
+                      Daily Telegram Digest (08:30 WIB)
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-xs text-slate-300 block mb-1">
+                          Telegram Bot Token
+                        </label>
+                        <input
+                          type={showSecrets ? "text" : "password"}
+                          value={integrationsDraft.telegram_bot_token}
+                          onChange={(e) =>
+                            setIntegrationsDraft({
+                              ...integrationsDraft,
+                              telegram_bot_token: e.target.value,
+                            })
+                          }
+                          placeholder="123456:ABC-DEF..."
+                          className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs text-white font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-300 block mb-1">
+                          Telegram Chat ID
+                        </label>
+                        <input
+                          type="text"
+                          value={integrationsDraft.telegram_chat_id}
+                          onChange={(e) =>
+                            setIntegrationsDraft({
+                              ...integrationsDraft,
+                              telegram_chat_id: e.target.value,
+                            })
+                          }
+                          placeholder="e.g. 123456789"
+                          className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs text-white font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-300 block mb-1">
+                          Dashboard URL in Digest Links
+                        </label>
+                        <input
+                          type="text"
+                          value={integrationsDraft.dashboard_public_url}
+                          onChange={(e) =>
+                            setIntegrationsDraft({
+                              ...integrationsDraft,
+                              dashboard_public_url: e.target.value,
+                            })
+                          }
+                          placeholder="https://job-seeker.fluffy-oratrice.ts.net"
+                          className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs text-white font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Optional Tier 2 Managed Aggregators */}
+                  <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400">
+                      Optional Tier 2 Aggregators (LinkedIn / Google Jobs)
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-slate-300 block mb-1">
+                          Apify API Token (LinkedIn Jobs)
+                        </label>
+                        <input
+                          type={showSecrets ? "text" : "password"}
+                          value={integrationsDraft.apify_token}
+                          onChange={(e) =>
+                            setIntegrationsDraft({
+                              ...integrationsDraft,
+                              apify_token: e.target.value,
+                            })
+                          }
+                          placeholder="apify_api_..."
+                          className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs text-white font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-300 block mb-1">
+                          SerpApi Key (Google Jobs)
+                        </label>
+                        <input
+                          type={showSecrets ? "text" : "password"}
+                          value={integrationsDraft.serpapi_key}
+                          onChange={(e) =>
+                            setIntegrationsDraft({
+                              ...integrationsDraft,
+                              serpapi_key: e.target.value,
+                            })
+                          }
+                          placeholder="serpapi_..."
+                          className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs text-white font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {activeConfigTab === "cv" && (
                 <textarea
                   value={cvDraft}

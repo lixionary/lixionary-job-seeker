@@ -95,7 +95,21 @@ class ScrapeRunDocument(BaseModel):
     error_message: Optional[str] = None
 
 
+class IntegrationSettingsPayload(BaseModel):
+    llm_base_url: str = "https://api.minimax.io/v1"
+    llm_api_key: str = ""
+    llm_model: str = "MiniMax-M1"
+    llm_tailor_model: str = "MiniMax-M1"
+    max_llm_scores_per_run: int = 50
+    apify_token: str = ""
+    serpapi_key: str = ""
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+    dashboard_public_url: str = "https://job-seeker.fluffy-oratrice.ts.net"
+
+
 class AppConfigPayload(BaseModel):
     cv_markdown: str
     preferences_yaml: str
     companies_yaml: str
+    integrations: Optional[IntegrationSettingsPayload] = None

@@ -17,6 +17,47 @@ def get_db() -> AsyncIOMotorDatabase:
     return _db
 
 
+def apply_integrations_to_runtime(integrations: dict[str, Any]) -> None:
+    """Apply persisted integration settings onto the in-memory settings singleton."""
+    if not integrations:
+        return
+    if "llm_base_url" in integrations and integrations["llm_base_url"]:
+        settings.llm_base_url = str(integrations["llm_base_url"]).strip()
+    if "llm_api_key" in integrations:
+        settings.llm_api_key = str(integrations["llm_api_key"] or "").strip()
+    if "llm_model" in integrations and integrations["llm_model"]:
+        settings.llm_model = str(integrations["llm_model"]).strip()
+    if "llm_tailor_model" in integrations and integrations["llm_tailor_model"]:
+        settings.llm_tailor_model = str(integrations["llm_tailor_model"]).strip()
+    if "max_llm_scores_per_run" in integrations and integrations["max_llm_scores_per_run"] is not None:
+        settings.max_llm_scores_per_run = int(integrations["max_llm_scores_per_run"])
+    if "apify_token" in integrations:
+        settings.apify_token = str(integrations["apify_token"] or "").strip()
+    if "serpapi_key" in integrations:
+        settings.serpapi_key = str(integrations["serpapi_key"] or "").strip()
+    if "telegram_bot_token" in integrations:
+        settings.telegram_bot_token = str(integrations["telegram_bot_token"] or "").strip()
+    if "telegram_chat_id" in integrations:
+        settings.telegram_chat_id = str(integrations["telegram_chat_id"] or "").strip()
+    if "dashboard_public_url" in integrations and integrations["dashboard_public_url"]:
+        settings.dashboard_public_url = str(integrations["dashboard_public_url"]).strip()
+
+
+def current_integrations_dict() -> dict[str, Any]:
+    return {
+        "llm_base_url": settings.llm_base_url,
+        "llm_api_key": settings.llm_api_key,
+        "llm_model": settings.llm_model,
+        "llm_tailor_model": settings.llm_tailor_model,
+        "max_llm_scores_per_run": settings.max_llm_scores_per_run,
+        "apify_token": settings.apify_token,
+        "serpapi_key": settings.serpapi_key,
+        "telegram_bot_token": settings.telegram_bot_token,
+        "telegram_chat_id": settings.telegram_chat_id,
+        "dashboard_public_url": settings.dashboard_public_url,
+    }
+
+
 async def init_db() -> None:
     db = get_db()
     await db.jobs.create_index("id", unique=True)
@@ -53,13 +94,28 @@ async def ensure_config_loaded(db: AsyncIOMotorDatabase | None = None) -> dict[s
             "cv_markdown": cv_disk,
             "preferences_yaml": pref_disk,
             "companies_yaml": comp_disk,
+            "integrations": current_integrations_dict(),
             "updated_at": datetime.now(timezone.utc),
         }
         await db.settings.insert_one(doc)
+    else:
+        if "integrations" in doc and isinstance(doc["integrations"], dict):
+            apply_integrations_to_runtime(doc["integrations"])
+        else:
+            doc["integrations"] = current_integrations_dict()
+            await db.settings.update_one(
+                {"_id": "global"},
+                {"$set": {"integrations": doc["integrations"]}},
+            )
     return doc
 
 
-async def save_app_config(cv_markdown: str, preferences_yaml: str, companies_yaml: str) -> dict[str, Any]:
+async def save_app_config(
+    cv_markdown: str,
+    preferences_yaml: str,
+    companies_yaml: str,
+    integrations: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     # Validate YAML before saving
     yaml.safe_load(preferences_yaml)
     yaml.safe_load(companies_yaml)
@@ -68,18 +124,21 @@ async def save_app_config(cv_markdown: str, preferences_yaml: str, companies_yam
     _write_disk_file("preferences.yaml", preferences_yaml)
     _write_disk_file("companies.yaml", companies_yaml)
 
+    if integrations is not None:
+        apply_integrations_to_runtime(integrations)
+
     db = get_db()
     now = datetime.now(timezone.utc)
+    update_fields: dict[str, Any] = {
+        "cv_markdown": cv_markdown,
+        "preferences_yaml": preferences_yaml,
+        "companies_yaml": companies_yaml,
+        "integrations": current_integrations_dict(),
+        "updated_at": now,
+    }
     await db.settings.update_one(
         {"_id": "global"},
-        {
-            "$set": {
-                "cv_markdown": cv_markdown,
-                "preferences_yaml": preferences_yaml,
-                "companies_yaml": companies_yaml,
-                "updated_at": now,
-            }
-        },
+        {"$set": update_fields},
         upsert=True,
     )
     return await ensure_config_loaded(db)

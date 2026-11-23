@@ -34,12 +34,12 @@ services:
       SERPAPI_KEY: ${SERPAPI_KEY:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
-      DASHBOARD_PUBLIC_URL: ${DASHBOARD_PUBLIC_URL:-http://mini-pc-2.fluffy-oratrice.ts.net:3000}
+      DASHBOARD_PUBLIC_URL: ${DASHBOARD_PUBLIC_URL:-https://job-seeker.fluffy-oratrice.ts.net}
       TZ: ${TZ:-Asia/Jakarta}
     volumes:
       - ./config:/app/config
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      - "${HOST_BIND_IP:-127.0.0.1}:${BACKEND_PORT:-9211}:8000"
     depends_on:
       mongo:
         condition: service_healthy
@@ -61,7 +61,7 @@ services:
       HOSTNAME: 0.0.0.0
       INTERNAL_API_URL: http://backend:8000
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - "${HOST_BIND_IP:-127.0.0.1}:${FRONTEND_PORT:-9210}:3000"
     depends_on:
       backend:
         condition: service_healthy

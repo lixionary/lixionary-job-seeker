@@ -25,8 +25,8 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-- **Kanban Dashboard UI**: `http://localhost:3000` (or `http://mini-pc-2.fluffy-oratrice.ts.net:3000`)
-- **Backend OpenAPI Docs**: `http://localhost:8000/docs` (or `http://mini-pc-2.fluffy-oratrice.ts.net:8000/docs`)
+- **Kanban Dashboard UI (Tailscale Service)**: `https://job-seeker.fluffy-oratrice.ts.net` (local host binding `127.0.0.1:9210`)
+- **Backend OpenAPI Docs**: `https://job-seeker.fluffy-oratrice.ts.net:9211/docs` (local host binding `127.0.0.1:9211/docs`)
 
 ## CLI Commands
 
